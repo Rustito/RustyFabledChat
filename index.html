@@ -201,15 +201,8 @@
       <div class="hintline" id="authStatus">Not logged in — chat is read-only.</div>
 
       <div id="authIdle">
-        <div class="field"><input type="text" id="clientIdInput" class="wide" placeholder="Client ID (one-time setup)" autocomplete="off" spellcheck="false" dir="ltr"></div>
         <div class="field"><button id="twitchLoginBtn" class="primary" style="flex:1">Log in with Twitch</button></div>
-        <div class="hintline">
-          <b>One-time setup (2 min):</b> open
-          <a href="https://dev.twitch.tv/console/apps/create" target="_blank" rel="noopener" style="color:#a3b8ff">dev.twitch.tv/console/apps</a>
-          → Register Your Application → any name, OAuth Redirect URL <b>http://localhost</b>,
-          Category <b>Chat Bot</b>, Client Type <b>Public</b> → paste the Client ID above.
-          It saves — after that, login is one click + Authorize on Twitch.
-        </div>
+        <div class="hintline">Logging in lets you send messages and shows exact channel badges. You approve on Twitch's own site — no password is ever entered here.</div>
         <details>
           <summary class="hintline" style="cursor:pointer">Advanced: log in with a token instead</summary>
           <div class="field" style="margin-top:8px"><input type="password" id="tokenInput" class="wide" placeholder="OAuth token" autocomplete="off"></div>
@@ -955,11 +948,10 @@
   }
 
   /* --- one-click "Log in with Twitch" (OAuth device flow) --- */
+  var CLIENT_ID = 'q8k8kvk8iajk5rq3zhyer375udbx1y';   // Rusty Fabled Chat app
   function startDeviceLogin() {
-    var cid = $('clientIdInput').value.trim();
-    if (!cid) { setAuthUI('idle', 'Paste your Client ID first — see the one-time setup steps below.'); return; }
+    var cid = CLIENT_ID;
     AUTH.clientId = cid;
-    try { localStorage.setItem('rfc_clientid', cid); } catch (e) {}
     fetch('https://id.twitch.tv/oauth2/device', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -1082,13 +1074,12 @@
   $('channel').addEventListener('keydown', function (e) { if (e.key === 'Enter') connect(); });
 
   /* restore saved session, then connect */
-  try { $('clientIdInput').value = localStorage.getItem('rfc_clientid') || ''; } catch (e) {}
   var stored = loadAuth();
   if (!stored) { // migrate the old single-token storage if present
     try { var oldTok = localStorage.getItem('rfc_token'); if (oldTok) stored = { token: oldTok, refresh: '', clientId: '' }; } catch (e) {}
   }
   if (stored && stored.token) {
-    AUTH.clientId = stored.clientId || $('clientIdInput').value.trim();
+    AUTH.clientId = stored.clientId || CLIENT_ID;
     AUTH.refresh = stored.refresh || '';
     setAuthUI('idle', 'Restoring session…');
     finishLogin(stored.token, stored.refresh || '').catch(function () {
