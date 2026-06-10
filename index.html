@@ -1,0 +1,1144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rusty Fabled Chat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Noto+Sans+Arabic:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --accent: #9146FF;
+    --accent-soft: #772ce8;
+    --panel: #16131f;
+    --panel-2: #1e1a2a;
+    --line: #2e2840;
+    --ink: #efedf5;
+    --ink-dim: #9b94ad;
+    --font-size: 17px;
+    --text-color: #ffffff;
+    --shadow: 0 1px 3px rgba(0,0,0,.9), 0 0 6px rgba(0,0,0,.55);
+    --bubble-bg: transparent;
+    --bubble-radius: 0px;
+    --bubble-pad: 1px 4px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', 'Segoe UI', 'Noto Sans Arabic', Tahoma, sans-serif;
+    background: #0d0b14; color: var(--ink);
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  /* ---------- top bar ---------- */
+  header {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px;
+    background: linear-gradient(180deg, rgba(255,255,255,.07) 0%, rgba(255,255,255,0) 55%), var(--panel);
+    border-bottom: 1px solid var(--line);
+    flex: 0 0 auto;
+  }
+  header .logo {
+    width: 30px; height: 30px; border-radius: 8px;
+    background: linear-gradient(160deg, #a970ff, #6c2bd9);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.45), 0 2px 6px rgba(108,43,217,.5);
+    display: grid; place-items: center; font-weight: 800; color: #fff; font-size: 15px;
+    flex: 0 0 auto;
+  }
+  header input#channel {
+    flex: 0 1 240px; min-width: 120px;
+    background: #0d0b14; border: 1px solid var(--line); border-radius: 8px;
+    color: var(--ink); padding: 8px 12px; font: inherit; font-size: 14px;
+    direction: ltr;
+  }
+  header input#channel:focus { outline: none; border-color: var(--accent); }
+  button {
+    font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 8px;
+    background: var(--panel-2); color: var(--ink); padding: 8px 14px;
+  }
+  button.primary {
+    background: linear-gradient(180deg, #a166ff, var(--accent-soft));
+    border-color: var(--accent-soft); color: #fff;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.35);
+  }
+  button:hover { filter: brightness(1.1); }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  #status { font-size: 12.5px; color: var(--ink-dim); margin-inline-start: auto; white-space: nowrap; }
+  #status.live { color: #2fd06f; }
+  #status.live::before { content: '● '; }
+
+  /* ---------- layout ---------- */
+  main { flex: 1 1 auto; display: flex; min-height: 0; }
+  #stage { flex: 1 1 auto; position: relative; min-width: 0; }
+  #bg { position: absolute; inset: 0; background-size: cover; background-position: center; }
+  #chat {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; justify-content: flex-end;
+    padding: 12px 16px; overflow-y: auto; scrollbar-width: thin;
+    font-size: var(--font-size); color: var(--text-color);
+  }
+
+  /* ---------- chat messages (same look as the OBS version) ---------- */
+  .tc-msg, .tc-event {
+    line-height: 1.45;
+    word-wrap: break-word; overflow-wrap: anywhere;
+    unicode-bidi: plaintext;
+    text-shadow: var(--shadow);
+    background: var(--bubble-bg);
+    border-radius: var(--bubble-radius);
+    padding: var(--bubble-pad);
+    margin-top: 4px;
+    opacity: 0; transform: translateY(8px);
+    transition: opacity .25s ease, transform .25s ease;
+  }
+  .tc-in { opacity: 1; transform: none; }
+  .tc-fade { opacity: 0 !important; transition: opacity 1.2s ease; }
+  .tc-name { font-weight: 700; }
+  .tc-sep { opacity: .85; }
+  .tc-time { opacity: .6; font-size: .8em; margin-inline-end: 6px; font-variant-numeric: tabular-nums; }
+  .tc-badge { height: 1.05em; vertical-align: -0.18em; margin-inline-end: 4px; border-radius: 2px; }
+  .tc-emote { height: 1.6em; vertical-align: middle; margin: -0.3em 1px; }
+  .tc-image {
+    display: block; max-width: 92%; border-radius: 8px;
+    margin: 4px 0; box-shadow: 0 2px 10px rgba(0,0,0,.5);
+  }
+  .tc-link { color: #a3b8ff; text-decoration: underline; word-break: break-all; }
+  .tc-event {
+    font-style: italic; opacity: .95;
+    border-inline-start: 3px solid var(--accent);
+    padding-inline-start: 8px;
+  }
+  .tc-event.tc-in { opacity: .95; }
+  .tc-msg-action .tc-body { font-style: italic; }
+
+  #deviceCode {
+    font-family: ui-monospace, Consolas, monospace;
+    font-size: 26px; font-weight: 700; letter-spacing: .18em;
+    text-align: center; color: #d9c6ff;
+    background: #0d0b14; border: 1px dashed var(--accent-soft);
+    border-radius: 10px; padding: 10px 6px; margin: 8px 0;
+    user-select: all;
+  }
+  header .brand {
+    font-weight: 800; font-size: 15px; letter-spacing: .02em; white-space: nowrap;
+    background: linear-gradient(180deg, #d9c6ff, #a970ff);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  /* ---------- send bar ---------- */
+  #sendBar {
+    position: absolute; inset-inline: 0; bottom: 0; z-index: 3;
+    display: none; gap: 8px; padding: 10px 12px;
+    background: linear-gradient(180deg, rgba(13,11,20,0), rgba(13,11,20,.85) 40%);
+  }
+  #sendBar.on { display: flex; }
+  #sendInput {
+    flex: 1; background: rgba(13,11,20,.9); border: 1px solid var(--line);
+    border-radius: 10px; color: var(--ink); padding: 10px 14px;
+    font: inherit; font-size: 14.5px;
+  }
+  #sendInput:focus { outline: none; border-color: var(--accent); }
+  #stage.with-send #chat { padding-bottom: 64px; }
+
+  /* ---------- settings drawer ---------- */
+  aside {
+    flex: 0 0 300px; width: 300px;
+    background: var(--panel); border-inline-start: 1px solid var(--line);
+    overflow-y: auto; scrollbar-width: thin;
+    padding: 14px; display: flex; flex-direction: column; gap: 16px;
+    transition: margin .2s ease;
+  }
+  aside.hidden { margin-inline-end: -300px; }
+  aside h2 { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-dim); }
+  .group { display: flex; flex-direction: column; gap: 8px; }
+  .field { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13.5px; }
+  .field label { color: var(--ink); }
+  .field input[type=text], .field input[type=url], .field select {
+    background: #0d0b14; border: 1px solid var(--line); border-radius: 6px;
+    color: var(--ink); padding: 6px 8px; font: inherit; font-size: 13px; width: 150px;
+  }
+  .field input[type=range] { width: 110px; accent-color: var(--accent); }
+  .field input[type=color] { width: 34px; height: 26px; border: 1px solid var(--line); border-radius: 6px; background: none; padding: 0; cursor: pointer; }
+  .field input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); }
+  .field .val { font-size: 12px; color: var(--ink-dim); min-width: 34px; text-align: end; }
+  .wide { width: 100% !important; }
+  .hintline { font-size: 11.5px; color: var(--ink-dim); line-height: 1.5; }
+  #copyObs { width: 100%; }
+  #obsOut {
+    width: 100%; background: #0d0b14; border: 1px solid var(--line); border-radius: 6px;
+    color: var(--ink-dim); font-size: 11px; padding: 6px 8px; font-family: ui-monospace, monospace;
+    word-break: break-all; direction: ltr; display: none;
+  }
+  @media (max-width: 680px) {
+    aside { position: absolute; inset-block: 0; inset-inline-end: 0; z-index: 5; box-shadow: -8px 0 24px rgba(0,0,0,.5); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">R</div>
+  <span class="brand">Rusty Fabled Chat</span>
+  <input id="channel" type="text" placeholder="channel name" autocomplete="off" spellcheck="false">
+  <button id="connectBtn" class="primary">Connect</button>
+  <span id="status">Not connected</span>
+  <button id="gearBtn" title="Settings" aria-label="Toggle settings">⚙ Settings</button>
+</header>
+
+<main>
+  <div id="stage">
+    <div id="bg"></div>
+    <div id="chat"></div>
+    <div id="sendBar">
+      <input id="sendInput" type="text" dir="auto" placeholder="Send a message…" autocomplete="off" maxlength="500">
+      <button id="sendBtn" class="primary">Send</button>
+    </div>
+  </div>
+
+  <aside id="panel">
+    <div class="group">
+      <h2>Account</h2>
+      <div class="hintline" id="authStatus">Not logged in — chat is read-only.</div>
+
+      <div id="authIdle">
+        <div class="field"><input type="text" id="clientIdInput" class="wide" placeholder="Client ID (one-time setup)" autocomplete="off" spellcheck="false" dir="ltr"></div>
+        <div class="field"><button id="twitchLoginBtn" class="primary" style="flex:1">Log in with Twitch</button></div>
+        <div class="hintline">
+          <b>One-time setup (2 min):</b> open
+          <a href="https://dev.twitch.tv/console/apps/create" target="_blank" rel="noopener" style="color:#a3b8ff">dev.twitch.tv/console/apps</a>
+          → Register Your Application → any name, OAuth Redirect URL <b>http://localhost</b>,
+          Category <b>Chat Bot</b>, Client Type <b>Public</b> → paste the Client ID above.
+          It saves — after that, login is one click + Authorize on Twitch.
+        </div>
+        <details>
+          <summary class="hintline" style="cursor:pointer">Advanced: log in with a token instead</summary>
+          <div class="field" style="margin-top:8px"><input type="password" id="tokenInput" class="wide" placeholder="OAuth token" autocomplete="off"></div>
+          <div class="field"><button id="loginBtn" style="flex:1">Use token</button></div>
+        </details>
+      </div>
+
+      <div id="authWait" hidden>
+        <div class="hintline">On Twitch, enter this code and press <b>Activate</b>:</div>
+        <div id="deviceCode" dir="ltr">--------</div>
+        <div class="field" style="gap:8px">
+          <a id="activateLink" href="https://www.twitch.tv/activate" target="_blank" rel="noopener" style="flex:1"><button class="primary" style="width:100%">Open twitch.tv/activate</button></a>
+          <button id="cancelLoginBtn" style="flex:1">Cancel</button>
+        </div>
+        <div class="hintline" id="waitStatus">Waiting for you to authorize…</div>
+      </div>
+
+      <div id="authDone" hidden>
+        <div class="field"><button id="logoutBtn" style="flex:1">Log out</button></div>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Background</h2>
+      <div class="field"><label for="bgMode">Type</label>
+        <select id="bgMode">
+          <option value="dark">Dark</option>
+          <option value="color">Solid color</option>
+          <option value="image">Image URL</option>
+          <option value="transparent">Transparent</option>
+        </select>
+      </div>
+      <div class="field" id="bgColorRow" hidden><label for="bgColor">Color</label><input type="color" id="bgColor" value="#18181b"></div>
+      <div class="field" id="bgImageRow" hidden><label for="bgImage" class="sr">Image</label><input type="url" id="bgImage" class="wide" placeholder="https://...jpg / png / gif"></div>
+      <div class="field"><label for="bgDim">Dim image</label><input type="range" id="bgDim" min="0" max="90" value="0"><span class="val" id="bgDimVal">0%</span></div>
+    </div>
+
+    <div class="group">
+      <h2>Text</h2>
+      <div class="field"><label for="fontSize">Size</label><input type="range" id="fontSize" min="12" max="42" value="17"><span class="val" id="fontSizeVal">17</span></div>
+      <div class="field"><label for="textColor">Color</label><input type="color" id="textColor" value="#ffffff"></div>
+      <div class="field"><label for="shadowChk">Outline shadow</label><input type="checkbox" id="shadowChk" checked></div>
+      <div class="field"><label for="boldChk">Bold</label><input type="checkbox" id="boldChk"></div>
+      <div class="field"><label for="alignSel">Direction</label>
+        <select id="alignSel">
+          <option value="auto">Auto (Arabic + English)</option>
+          <option value="ltr">Force LTR</option>
+          <option value="rtl">Force RTL</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="group">
+      <h2>Chat</h2>
+      <div class="field"><label for="badgesChk">Twitch badges</label><input type="checkbox" id="badgesChk" checked></div>
+      <div class="field"><label for="emotesChk">BTTV / FFZ / 7TV emotes</label><input type="checkbox" id="emotesChk" checked></div>
+      <div class="field"><label for="imagesChk">Embed image links</label><input type="checkbox" id="imagesChk" checked></div>
+      <div class="field"><label for="eventsChk">Subs / raids / events</label><input type="checkbox" id="eventsChk" checked></div>
+      <div class="field"><label for="tsChk">Timestamps</label><input type="checkbox" id="tsChk"></div>
+      <div class="field"><label for="bubblesChk">Message bubbles</label><input type="checkbox" id="bubblesChk"></div>
+      <div class="field"><label for="limitRange">Max messages</label><input type="range" id="limitRange" min="10" max="200" step="10" value="60"><span class="val" id="limitVal">60</span></div>
+      <div class="field"><label for="fadeRange">Fade after (sec)</label><input type="range" id="fadeRange" min="0" max="120" step="5" value="0"><span class="val" id="fadeVal">off</span></div>
+      <div class="field"><label for="imgHeight">Max image height</label><input type="range" id="imgHeight" min="80" max="500" step="10" value="220"><span class="val" id="imgHeightVal">220</span></div>
+    </div>
+
+    <div class="group">
+      <h2>Use in OBS</h2>
+      <button id="copyObs">Copy settings for OBS version</button>
+      <div id="obsOut"></div>
+      <div class="hintline">
+        Paste onto the end of the <b>twitch-chat-obs.html</b> path in your OBS Browser Source URL, e.g.
+        <i>file:///C:/overlays/twitch-chat-obs.html<b>?channel=...</b></i>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<script>/* ============================================================
+   TwitchChat core engine — anonymous IRC, no auth required.
+   Twitch native emotes (code-point safe = Arabic safe),
+   BTTV / FFZ / 7TV emotes, global badges, image embeds.
+   ============================================================ */
+(function (global) {
+  'use strict';
+
+  /* ---------- Known global badge UUIDs (static-cdn.jtvnw.net) ---------- */
+  var BADGES = {
+    'broadcaster/1':  '5527c58c-fb7d-422d-b71b-f309dcb85cc1',
+    'moderator/1':    '3267646d-33f0-4b17-b3df-f923a41db1d0',
+    'vip/1':          'b817aba4-fad8-49e2-b88a-7cc744dfa6ec',
+    'subscriber/0':   '5d9f2208-5dd8-11e7-8513-2ff4adfae661',
+    'founder/0':      '511b78a9-ab37-472f-9569-457753bbe7d3',
+    'partner/1':      'd12a2e27-16f6-41d0-ab77-b780518f00a3',
+    'premium/1':      'bbbe0db0-a598-423e-86d0-f9fb98ca1933',
+    'turbo/1':        'bd444ec6-8f34-4bf9-91f4-af1e3428d80f',
+    'staff/1':        'd97c37bd-a6f5-4c38-8f57-4e4bef88af34',
+    'admin/1':        '9ef7e029-4cdf-4d4d-a0d5-e2b3fb2583fe',
+    'global_mod/1':   '9384c43e-4ce7-4e94-b2a1-b93656896eba',
+    'glhf-pledge/1':  '3158e758-3cb4-43c5-94b3-7639810451c5',
+    'sub-gifter/1':   'a5ef6c17-2e5b-4d8f-9b80-2779fd722414',
+    'sub-gifter/5':   'ee113e59-c839-4472-969a-1e16d20f8962',
+    'sub-gifter/10':  'd333288c-65d7-4c7b-b691-cdd7b3484bf8',
+    'sub-gifter/25':  '052a5d41-f1cc-455c-bc7b-fe841ffaf17f',
+    'sub-gifter/50':  'c4eba5b4-17a7-40a1-a668-bc1972c1e24d',
+    'sub-gifter/100': '8343ada7-3451-434e-91c4-e82bdcf54460',
+    'bits/1':         '73b5c3fb-24f9-4a82-a852-2f475b59411c',
+    'bits/100':       '09d93036-e7ce-431c-9a9e-7044297d4569',
+    'bits/1000':      '0d85a29e-79ad-4c63-a285-3f7d263f7567',
+    'bits/5000':      '57cd97fc-3e9e-4c6d-9d41-60147137234e',
+    'bits/10000':     '68af213b-a771-4124-b6e3-9bb6d98aa732',
+    'bits-leader/1':  '8cd6cd52-2ba3-4910-90a8-c0d7d12bf09e',
+    'bits-leader/2':  'f04baac7-9141-4456-a0e7-6301bcc34138',
+    'bits-leader/3':  'f1d2aab6-b647-47af-965b-84909cf303aa',
+    'hype-train/1':   'fae4086c-3190-44d4-83c8-8ef0cbe1a515',
+    'hype-train/2':   '9c8d038a-3a29-45ea-96d4-5031fb1a7a81',
+    'artist-badge/1': '4300a897-03dc-4e83-8c0e-c332fee7057f',
+    'no_audio/1':     'aef2cd08-f29b-45a1-8c12-d44d7fd5e6f0',
+    'no_video/1':     '199a0dba-58f3-494e-a7fc-1fa0a1001fb8',
+    'game-developer/1':'85856a4a-eb7d-4e26-a43e-d204a977ade4',
+    'twitch-recap-2023/1':'8f2ada46-9e22-4f63-bd24-bb0356dec2af'
+  };
+  // Fallbacks when an exact badge version has no known UUID
+  var BADGE_FALLBACK = {
+    'subscriber': '5d9f2208-5dd8-11e7-8513-2ff4adfae661',
+    'founder':    '511b78a9-ab37-472f-9569-457753bbe7d3',
+    'bits':       '73b5c3fb-24f9-4a82-a852-2f475b59411c',
+    'sub-gifter': 'a5ef6c17-2e5b-4d8f-9b80-2779fd722414',
+    'hype-train': 'fae4086c-3190-44d4-83c8-8ef0cbe1a515',
+    'bits-leader':'8cd6cd52-2ba3-4910-90a8-c0d7d12bf09e'
+  };
+  function badgeUrl(name, version) {
+    var id = BADGES[name + '/' + version] || BADGE_FALLBACK[name];
+    return id ? 'https://static-cdn.jtvnw.net/badges/v1/' + id + '/3' : null;
+  }
+
+  /* ---------- Default name colors (same palette Twitch uses) ---------- */
+  var DEFAULT_COLORS = ['#FF0000','#0000FF','#00FF00','#B22222','#FF7F50','#9ACD32','#FF4500','#2E8B57','#DAA520','#D2691E','#5F9EA0','#1E90FF','#FF69B4','#8A2BE2','#00FF7F'];
+  function colorFor(name) {
+    var h = 0;
+    for (var i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+    return DEFAULT_COLORS[h % DEFAULT_COLORS.length];
+  }
+  // Lighten too-dark colors so names stay readable on dark/transparent overlays
+  function readable(hex) {
+    var m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+    if (!m) return hex;
+    var n = parseInt(m[1], 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+    var lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    if (lum < 80) { var k = (80 - lum) / 80; r += (255 - r) * k * 0.7; g += (255 - g) * k * 0.7; b += (255 - b) * k * 0.7; }
+    return 'rgb(' + (r | 0) + ',' + (g | 0) + ',' + (b | 0) + ')';
+  }
+
+  /* ---------- IRC tag value unescaping ---------- */
+  function unescapeTag(v) {
+    return v.replace(/\\(.)/g, function (_, c) {
+      return c === 's' ? ' ' : c === 'n' ? '\n' : c === 'r' ? '\r' : c === ':' ? ';' : c;
+    });
+  }
+  function parseTags(raw) {
+    var tags = {};
+    raw.split(';').forEach(function (p) {
+      var i = p.indexOf('=');
+      if (i === -1) { tags[p] = ''; return; }
+      tags[p.slice(0, i)] = unescapeTag(p.slice(i + 1));
+    });
+    return tags;
+  }
+  function parseLine(line) {
+    var msg = { tags: {}, prefix: '', command: '', params: [] };
+    var rest = line;
+    if (rest[0] === '@') { var sp = rest.indexOf(' '); msg.tags = parseTags(rest.slice(1, sp)); rest = rest.slice(sp + 1); }
+    if (rest[0] === ':') { var sp2 = rest.indexOf(' '); msg.prefix = rest.slice(1, sp2); rest = rest.slice(sp2 + 1); }
+    var trailingIdx = rest.indexOf(' :');
+    var trailing = null;
+    if (trailingIdx !== -1) { trailing = rest.slice(trailingIdx + 2); rest = rest.slice(0, trailingIdx); }
+    msg.params = rest.split(' ').filter(Boolean);
+    msg.command = msg.params.shift() || '';
+    if (trailing !== null) msg.params.push(trailing);
+    return msg;
+  }
+
+  /* ---------- Image link support ----------
+     Returns a direct image URL, or null if the link isn't embeddable. */
+  function toImageUrl(url) {
+    var u;
+    try { u = new URL(url); } catch (e) { return null; }
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+    var host = u.hostname.replace(/^www\./, '');
+    var path = u.pathname;
+
+    // 1) Any direct image file from any site (imgur, pinimg, discord cdn,
+    //    i.redd.it, ibb, postimg, imgflip, 7tv, wikimedia, ...)
+    if (/\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(path)) return url;
+
+    // 2) imgur page link -> direct image
+    if (host === 'imgur.com') {
+      var im = path.match(/^\/(?:gallery\/|a\/)?([A-Za-z0-9]{5,10})$/);
+      if (im && path.indexOf('/a/') === -1 && path.indexOf('/gallery/') === -1)
+        return 'https://i.imgur.com/' + im[1] + '.png';
+    }
+    if (host === 'i.imgur.com') {
+      var im2 = path.match(/^\/([A-Za-z0-9]{5,10})$/);
+      if (im2) return 'https://i.imgur.com/' + im2[1] + '.png';
+    }
+
+    // 3) giphy page link -> media gif
+    if (host === 'giphy.com' || host === 'media.giphy.com') {
+      var gm = path.match(/-([A-Za-z0-9]{8,})$/) || path.match(/\/media\/([A-Za-z0-9]+)\//);
+      if (gm) return 'https://media.giphy.com/media/' + gm[1] + '/giphy.gif';
+    }
+
+    // 4) tenor direct media (c.tenor.com / media.tenor.com without extension)
+    if (host === 'c.tenor.com' || host === 'media.tenor.com' || host === 'media1.tenor.com') {
+      return url; // tenor media URLs render as images even without extension
+    }
+
+    // 5) Pinterest direct CDN (page pins can't be resolved client-side)
+    if (host === 'i.pinimg.com') return url;
+
+    // 6) Dropbox share link -> raw
+    if (host === 'dropbox.com' || host === 'dl.dropboxusercontent.com') {
+      if (/\.(png|jpe?g|gif|webp)/i.test(path)) {
+        u.searchParams.set('raw', '1'); u.searchParams.delete('dl');
+        return u.toString();
+      }
+    }
+
+    // 7) Unsplash direct
+    if (host === 'images.unsplash.com' || host === 'unsplash.com' && /^\/photos\//.test(path) === false) {
+      if (host === 'images.unsplash.com') return url;
+    }
+    return null;
+  }
+  var URL_RE = /(https?:\/\/[^\s]+)/g;
+
+  /* ---------- Code-point safe Twitch emote segmentation ----------
+     Twitch emote ranges are indexed by Unicode CODE POINTS, so all
+     slicing here uses Array.from(). This is what keeps Arabic text,
+     diacritics and emoji from ever shifting or corrupting. */
+  function segment(text, emotesTag) {
+    var cps = Array.from(text);
+    var ranges = [];
+    if (emotesTag) {
+      emotesTag.split('/').forEach(function (part) {
+        var ci = part.indexOf(':');
+        if (ci === -1) return;
+        var id = part.slice(0, ci);
+        part.slice(ci + 1).split(',').forEach(function (r) {
+          var se = r.split('-');
+          var s = +se[0], e = +se[1];
+          if (!isNaN(s) && !isNaN(e)) ranges.push({ s: s, e: e, id: id });
+        });
+      });
+      ranges.sort(function (a, b) { return a.s - b.s; });
+    }
+    var segs = [], pos = 0;
+    ranges.forEach(function (r) {
+      if (r.s >= cps.length) return;
+      if (r.s > pos) segs.push({ t: 'text', text: cps.slice(pos, r.s).join('') });
+      segs.push({ t: 'emote', id: r.id, name: cps.slice(r.s, r.e + 1).join('') });
+      pos = r.e + 1;
+    });
+    if (pos < cps.length) segs.push({ t: 'text', text: cps.slice(pos).join('') });
+    if (!segs.length) segs.push({ t: 'text', text: text });
+    return segs;
+  }
+
+  /* ---------- Third-party emotes (BTTV / FFZ / 7TV) ---------- */
+  function fetchJSON(url) {
+    return fetch(url).then(function (r) { if (!r.ok) throw 0; return r.json(); });
+  }
+
+  /* ============================ ENGINE ============================ */
+  function TwitchChat(opts) {
+    this.opts = Object.assign({
+      channel: '',
+      container: null,
+      maxMessages: 60,
+      showBadges: true,
+      showTimestamps: false,
+      embedImages: true,
+      thirdPartyEmotes: true,
+      showEvents: true,        // subs / raids / announcements
+      fadeAfter: 0,            // seconds; 0 = never fade
+      align: 'auto',           // auto | ltr | rtl
+      maxImageHeight: 220,
+      token: '',               // OAuth token (with or without "oauth:" prefix)
+      login: '',               // Twitch username matching the token
+      clientId: '',            // client id from token validation (for Helix badges)
+      onStatus: function () {}
+    }, opts);
+    this.ws = null;
+    this.emotes3p = {};        // name -> {url, provider}
+    this.badgeMap = {};        // exact badges from Helix when logged in
+    this.selfTags = null;      // own USERSTATE tags (badges/color/display-name)
+    this.roomId = null;
+    this.alive = false;
+    this._reconnectDelay = 1000;
+  }
+
+  TwitchChat.prototype.connect = function () {
+    var self = this, o = this.opts;
+    if (!o.channel) { o.onStatus('no-channel'); return; }
+    this.disconnect();
+    this.alive = true;
+    o.onStatus('connecting');
+    var ws = new WebSocket('wss://irc-ws.chat.twitch.tv:443');
+    this.ws = ws;
+    ws.onopen = function () {
+      ws.send('CAP REQ :twitch.tv/tags twitch.tv/commands');
+      if (o.token && o.login) {
+        ws.send('PASS oauth:' + o.token.replace(/^oauth:/, ''));
+        ws.send('NICK ' + o.login.toLowerCase());
+      } else {
+        ws.send('PASS SCHMOOPIIE');
+        ws.send('NICK justinfan' + (10000 + (Math.random() * 80000 | 0)));
+      }
+      ws.send('JOIN #' + o.channel.toLowerCase().replace(/^#/, ''));
+    };
+    ws.onmessage = function (ev) {
+      ev.data.split('\r\n').forEach(function (line) {
+        if (!line) return;
+        if (line.indexOf('PING') === 0) { ws.send('PONG :tmi.twitch.tv'); return; }
+        self._handle(parseLine(line));
+      });
+    };
+    ws.onclose = function () {
+      if (!self.alive) return;
+      self.opts.onStatus('reconnecting');
+      setTimeout(function () { if (self.alive) self.connect(); }, self._reconnectDelay);
+      self._reconnectDelay = Math.min(self._reconnectDelay * 2, 15000);
+    };
+    ws.onerror = function () { try { ws.close(); } catch (e) {} };
+  };
+
+  TwitchChat.prototype.disconnect = function () {
+    this.alive = false;
+    if (this.ws) { try { this.ws.close(); } catch (e) {} this.ws = null; }
+  };
+
+  TwitchChat.prototype._handle = function (m) {
+    var o = this.opts;
+    switch (m.command) {
+      case '001': o.onStatus('connected'); this._reconnectDelay = 1000; break;
+      case 'USERSTATE':
+      case 'GLOBALUSERSTATE':
+        this.selfTags = Object.assign({}, this.selfTags || {}, m.tags);
+        break;
+      case 'ROOMSTATE':
+        if (m.tags['room-id'] && m.tags['room-id'] !== this.roomId) {
+          this.roomId = m.tags['room-id'];
+          if (o.thirdPartyEmotes) this._load3p(this.roomId);
+          if (o.token && o.clientId) this._loadHelixBadges(this.roomId);
+        }
+        break;
+      case 'PRIVMSG':
+        this._renderMessage(m.tags, m.params[1] || '', false);
+        break;
+      case 'USERNOTICE': // subs, resubs, raids, gifts, announcements
+        if (o.showEvents) {
+          var sys = m.tags['system-msg'];
+          if (sys) this._renderEvent(sys, m.tags);
+          if (m.params[1]) this._renderMessage(m.tags, m.params[1], true);
+        }
+        break;
+      case 'CLEARMSG': {
+        var id = m.tags['target-msg-id'];
+        if (id) { var el = o.container.querySelector('[data-msgid="' + id + '"]'); if (el) el.remove(); }
+        break;
+      }
+      case 'CLEARCHAT': {
+        var user = m.params[1];
+        if (user) {
+          o.container.querySelectorAll('[data-user="' + user.toLowerCase() + '"]').forEach(function (n) { n.remove(); });
+        } else {
+          o.container.innerHTML = '';
+        }
+        break;
+      }
+      case 'NOTICE':
+        if (m.params[1] && /authentication failed|improperly formatted/i.test(m.params[1])) {
+          this.alive = false;            // bad token — don't reconnect-spam
+          o.onStatus('error:' + m.params[1]);
+        } else if (m.params[1] && /login|suspended|banned/i.test(m.params[1])) {
+          o.onStatus('error:' + m.params[1]);
+        }
+        break;
+    }
+  };
+
+  TwitchChat.prototype._load3p = function (roomId) {
+    var map = this.emotes3p;
+    function add(name, url, provider) { map[name] = { url: url, provider: provider }; }
+    // BTTV
+    fetchJSON('https://api.betterttv.net/3/cached/emotes/global').then(function (list) {
+      list.forEach(function (e) { add(e.code, 'https://cdn.betterttv.net/emote/' + e.id + '/2x', 'BTTV'); });
+    }).catch(function () {});
+    fetchJSON('https://api.betterttv.net/3/cached/users/twitch/' + roomId).then(function (d) {
+      (d.channelEmotes || []).concat(d.sharedEmotes || []).forEach(function (e) {
+        add(e.code, 'https://cdn.betterttv.net/emote/' + e.id + '/2x', 'BTTV');
+      });
+    }).catch(function () {});
+    // FFZ
+    fetchJSON('https://api.frankerfacez.com/v1/set/global').then(function (d) {
+      Object.keys(d.sets || {}).forEach(function (k) {
+        (d.sets[k].emoticons || []).forEach(function (e) {
+          var u = e.urls['2'] || e.urls['1'];
+          if (u) add(e.name, u.indexOf('http') === 0 ? u : 'https:' + u, 'FFZ');
+        });
+      });
+    }).catch(function () {});
+    fetchJSON('https://api.frankerfacez.com/v1/room/id/' + roomId).then(function (d) {
+      Object.keys(d.sets || {}).forEach(function (k) {
+        (d.sets[k].emoticons || []).forEach(function (e) {
+          var u = e.urls['2'] || e.urls['1'];
+          if (u) add(e.name, u.indexOf('http') === 0 ? u : 'https:' + u, 'FFZ');
+        });
+      });
+    }).catch(function () {});
+    // 7TV
+    fetchJSON('https://7tv.io/v3/emote-sets/global').then(function (d) {
+      (d.emotes || []).forEach(function (e) { add(e.name, 'https://cdn.7tv.app/emote/' + e.id + '/2x.webp', '7TV'); });
+    }).catch(function () {});
+    fetchJSON('https://7tv.io/v3/users/twitch/' + roomId).then(function (d) {
+      var set = d.emote_set && d.emote_set.emotes;
+      (set || []).forEach(function (e) { add(e.name, 'https://cdn.7tv.app/emote/' + e.id + '/2x.webp', '7TV'); });
+    }).catch(function () {});
+  };
+
+  /* ---------- DOM builders (textContent only — no injection) ---------- */
+  function el(tag, cls) { var n = document.createElement(tag); if (cls) n.className = cls; return n; }
+
+  TwitchChat.prototype._appendTextTokens = function (parent, text) {
+    var o = this.opts, e3 = this.emotes3p;
+    var parts = text.split(/(\s+)/);
+    for (var i = 0; i < parts.length; i++) {
+      var tok = parts[i];
+      if (!tok) continue;
+      if (/^\s+$/.test(tok)) { parent.appendChild(document.createTextNode(tok)); continue; }
+      // third-party emote?
+      if (o.thirdPartyEmotes && e3[tok]) {
+        var img = el('img', 'tc-emote');
+        img.src = e3[tok].url; img.alt = tok; img.title = tok + ' (' + e3[tok].provider + ')';
+        img.loading = 'lazy';
+        parent.appendChild(img);
+        continue;
+      }
+      // URL?
+      if (/^https?:\/\//i.test(tok)) {
+        var imgUrl = o.embedImages ? toImageUrl(tok) : null;
+        if (imgUrl) {
+          var wrap = el('span', 'tc-imgwrap');
+          var pic = el('img', 'tc-image');
+          pic.src = imgUrl; pic.alt = ''; pic.loading = 'lazy';
+          pic.style.maxHeight = o.maxImageHeight + 'px';
+          pic.onerror = (function (w, original) {
+            return function () { // broken image -> fall back to a plain link
+              w.innerHTML = '';
+              var a = el('a', 'tc-link'); a.href = original; a.target = '_blank';
+              a.rel = 'noopener noreferrer'; a.textContent = original;
+              w.appendChild(a);
+            };
+          })(wrap, tok);
+          var container = o.container;
+          pic.onload = function () { container.scrollTop = container.scrollHeight; };
+          wrap.appendChild(pic);
+          parent.appendChild(wrap);
+        } else {
+          var a = el('a', 'tc-link');
+          a.href = tok; a.target = '_blank'; a.rel = 'noopener noreferrer';
+          a.textContent = tok;
+          parent.appendChild(a);
+        }
+        continue;
+      }
+      parent.appendChild(document.createTextNode(tok));
+    }
+  };
+
+  TwitchChat.prototype._renderMessage = function (tags, text, isEvent) {
+    var o = this.opts;
+    var isAction = false;
+    var am = text.match(/^\u0001ACTION (.*)\u0001$/);
+    if (am) { isAction = true; text = am[1]; }
+
+    var row = el('div', 'tc-msg' + (isEvent ? ' tc-msg-event' : '') + (isAction ? ' tc-msg-action' : ''));
+    if (tags.id) row.dataset.msgid = tags.id;
+    var login = (tags['display-name'] || '').toLowerCase() || (tags.login || '');
+    row.dataset.user = login;
+    if (o.align !== 'ltr' && o.align !== 'rtl') row.dir = 'auto'; else row.dir = o.align;
+
+    if (o.showTimestamps) {
+      var ts = el('span', 'tc-time');
+      var d = new Date();
+      ts.textContent = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+      row.appendChild(ts);
+    }
+
+    if (o.showBadges && tags.badges) {
+      var self = this;
+      tags.badges.split(',').forEach(function (b) {
+        var nv = b.split('/');
+        var url = self._badgeUrl(nv[0], nv[1]);
+        if (!url) return;
+        var bi = el('img', 'tc-badge');
+        bi.src = url; bi.alt = nv[0];
+        bi.onerror = function () { bi.remove(); };
+        var info = (tags['badge-info'] || '').split(',').find(function (x) { return x.indexOf(nv[0] + '/') === 0; });
+        bi.title = nv[0] + (info ? ' (' + info.split('/')[1] + ' months)' : '');
+        row.appendChild(bi);
+      });
+    }
+
+    var name = el('span', 'tc-name');
+    name.textContent = tags['display-name'] || login || '???';
+    name.style.color = readable(tags.color || colorFor(name.textContent));
+    name.dir = 'ltr';
+    row.appendChild(name);
+
+    if (!isAction) {
+      var sep = el('span', 'tc-sep');
+      sep.textContent = ':';
+      row.appendChild(sep);
+    }
+    row.appendChild(document.createTextNode(' '));
+
+    var body = el('span', 'tc-body');
+    body.dir = 'auto';
+    if (isAction) body.style.color = name.style.color;
+    var segs = segment(text, tags.emotes);
+    for (var i = 0; i < segs.length; i++) {
+      var s = segs[i];
+      if (s.t === 'emote') {
+        var img = el('img', 'tc-emote');
+        img.src = 'https://static-cdn.jtvnw.net/emoticons/v2/' + s.id + '/default/dark/2.0';
+        img.alt = s.name; img.title = s.name;
+        body.appendChild(img);
+      } else {
+        this._appendTextTokens(body, s.text);
+      }
+    }
+    row.appendChild(body);
+    this._push(row);
+  };
+
+  TwitchChat.prototype._renderEvent = function (sysMsg, tags) {
+    var row = el('div', 'tc-event');
+    row.dir = 'auto';
+    if (tags.id) row.dataset.msgid = tags.id + '-sys';
+    row.textContent = sysMsg;
+    this._push(row);
+  };
+
+  TwitchChat.prototype._push = function (row) {
+    var o = this.opts, c = o.container;
+    c.appendChild(row);
+    requestAnimationFrame(function () { row.classList.add('tc-in'); });
+    while (c.children.length > o.maxMessages) c.removeChild(c.firstChild);
+    c.scrollTop = c.scrollHeight;
+    if (o.fadeAfter > 0) {
+      setTimeout(function () {
+        row.classList.add('tc-fade');
+        setTimeout(function () { if (row.parentNode) row.remove(); }, 1200);
+      }, o.fadeAfter * 1000);
+    }
+  };
+
+  /* ---------- send a message (requires login) ----------
+     Twitch doesn't echo your own PRIVMSG back, so we render it
+     locally using the badges/color from our USERSTATE tags. */
+  TwitchChat.prototype.send = function (text) {
+    if (!this.ws || this.ws.readyState !== 1 || !this.opts.login) return false;
+    text = String(text).replace(/[\r\n]+/g, ' ').trim();
+    if (!text) return false;
+    var chan = this.opts.channel.toLowerCase().replace(/^#/, '');
+    this.ws.send('PRIVMSG #' + chan + ' :' + text);
+    var tags = Object.assign({}, this.selfTags || {});
+    delete tags.emotes;                       // USERSTATE has emote-sets, not message emotes
+    if (!tags['display-name']) tags['display-name'] = this.opts.login;
+    this._renderMessage(tags, text, false);
+    return true;
+  };
+
+  /* ---------- exact badges via Helix (logged-in only) ----------
+     Replaces the static UUID map with the real global + channel set,
+     including the channel's custom subscriber badge art. */
+  TwitchChat.prototype._loadHelixBadges = function (broadcasterId) {
+    var self = this;
+    var h = {
+      'Authorization': 'Bearer ' + this.opts.token.replace(/^oauth:/, ''),
+      'Client-Id': this.opts.clientId
+    };
+    function ingest(d) {
+      (d.data || []).forEach(function (set) {
+        (set.versions || []).forEach(function (v) {
+          self.badgeMap[set.set_id + '/' + v.id] = v.image_url_2x || v.image_url_1x;
+        });
+      });
+    }
+    fetch('https://api.twitch.tv/helix/chat/badges/global', { headers: h })
+      .then(function (r) { return r.json(); }).then(ingest).catch(function () {});
+    fetch('https://api.twitch.tv/helix/chat/badges?broadcaster_id=' + broadcasterId, { headers: h })
+      .then(function (r) { return r.json(); }).then(ingest).catch(function () {});
+  };
+
+  TwitchChat.prototype._badgeUrl = function (name, version) {
+    return this.badgeMap[name + '/' + version] || badgeUrl(name, version);
+  };
+
+  /* ---------- token validation helper ----------
+     Resolves {login, client_id, user_id, expires_in} or rejects. */
+  TwitchChat.validateToken = function (token) {
+    token = String(token || '').replace(/^oauth:/, '').trim();
+    return fetch('https://id.twitch.tv/oauth2/validate', {
+      headers: { 'Authorization': 'OAuth ' + token }
+    }).then(function (r) {
+      if (!r.ok) throw new Error('Token is invalid or expired');
+      return r.json();
+    });
+  };
+
+  global.TwitchChat = TwitchChat;
+})(window);
+</script>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var chatEl = $('chat'), bgEl = $('bg'), statusEl = $('status');
+  var chat = null;
+
+  /* ---------------- settings state ---------------- */
+  var DEFAULTS = {
+    channel: '', bgMode: 'dark', bgColor: '#18181b', bgImage: '', bgDim: 0,
+    fontSize: 17, textColor: '#ffffff', shadow: true, bold: false, align: 'auto',
+    badges: true, emotes: true, images: true, events: true, ts: false, bubbles: false,
+    limit: 60, fade: 0, imgHeight: 220
+  };
+  var S = Object.assign({}, DEFAULTS);
+  try { Object.assign(S, JSON.parse(localStorage.getItem('twitchChatSettings') || '{}')); } catch (e) {}
+  function save() { try { localStorage.setItem('twitchChatSettings', JSON.stringify(S)); } catch (e) {} }
+
+  /* ---------------- apply settings ---------------- */
+  function applyStyle() {
+    var r = document.documentElement.style;
+    r.setProperty('--font-size', S.fontSize + 'px');
+    r.setProperty('--text-color', S.textColor);
+    r.setProperty('--shadow', S.shadow ? '0 1px 3px rgba(0,0,0,.9), 0 0 6px rgba(0,0,0,.55)' : 'none');
+    if (S.bubbles) {
+      r.setProperty('--bubble-bg', 'rgba(0,0,0,.55)');
+      r.setProperty('--bubble-radius', '10px');
+      r.setProperty('--bubble-pad', '6px 10px');
+    } else {
+      r.setProperty('--bubble-bg', 'transparent');
+      r.setProperty('--bubble-radius', '0px');
+      r.setProperty('--bubble-pad', '1px 4px');
+    }
+    chatEl.style.fontWeight = S.bold ? '600' : '400';
+
+    bgEl.style.backgroundImage = 'none';
+    bgEl.style.background = '';
+    if (S.bgMode === 'dark') bgEl.style.background = '#18181b';
+    else if (S.bgMode === 'color') bgEl.style.background = S.bgColor;
+    else if (S.bgMode === 'image' && S.bgImage) {
+      bgEl.style.backgroundImage =
+        'linear-gradient(rgba(0,0,0,' + (S.bgDim / 100) + '), rgba(0,0,0,' + (S.bgDim / 100) + ')), url("' + S.bgImage.replace(/"/g, '') + '")';
+      bgEl.style.backgroundSize = 'cover';
+    } else if (S.bgMode === 'transparent') {
+      // checkerboard preview so "transparent" is visible in the window version
+      bgEl.style.background =
+        'repeating-conic-gradient(#2a2636 0% 25%, #1b1726 0% 50%) 0 0 / 22px 22px';
+    }
+    $('bgColorRow').hidden = S.bgMode !== 'color';
+    $('bgImageRow').hidden = S.bgMode !== 'image';
+  }
+
+  function applyChatOpts() {
+    if (!chat) return;
+    Object.assign(chat.opts, {
+      maxMessages: S.limit, showBadges: S.badges, showTimestamps: S.ts,
+      embedImages: S.images, thirdPartyEmotes: S.emotes, showEvents: S.events,
+      fadeAfter: S.fade, align: S.align, maxImageHeight: S.imgHeight
+    });
+  }
+
+  /* ---------------- bind controls ---------------- */
+  function bind(id, key, type, after) {
+    var n = $(id);
+    if (type === 'check') { n.checked = S[key]; n.onchange = function () { S[key] = n.checked; done(); }; }
+    else if (type === 'range') { n.value = S[key]; n.oninput = function () { S[key] = +n.value; done(); }; }
+    else { n.value = S[key]; n.oninput = function () { S[key] = n.value; done(); }; }
+    function done() { save(); applyStyle(); applyChatOpts(); if (after) after(); }
+    if (after) after();
+  }
+  bind('bgMode', 'bgMode', 'select');
+  bind('bgColor', 'bgColor', 'color');
+  bind('bgImage', 'bgImage', 'text');
+  bind('bgDim', 'bgDim', 'range', function () { $('bgDimVal').textContent = S.bgDim + '%'; });
+  bind('fontSize', 'fontSize', 'range', function () { $('fontSizeVal').textContent = S.fontSize; });
+  bind('textColor', 'textColor', 'color');
+  bind('shadowChk', 'shadow', 'check');
+  bind('boldChk', 'bold', 'check');
+  bind('alignSel', 'align', 'select');
+  bind('badgesChk', 'badges', 'check');
+  bind('emotesChk', 'emotes', 'check');
+  bind('imagesChk', 'images', 'check');
+  bind('eventsChk', 'events', 'check');
+  bind('tsChk', 'ts', 'check');
+  bind('bubblesChk', 'bubbles', 'check');
+  bind('limitRange', 'limit', 'range', function () { $('limitVal').textContent = S.limit; });
+  bind('fadeRange', 'fade', 'range', function () { $('fadeVal').textContent = S.fade === 0 ? 'off' : S.fade; });
+  bind('imgHeight', 'imgHeight', 'range', function () { $('imgHeightVal').textContent = S.imgHeight; });
+  applyStyle();
+
+  /* ---------------- account / login ---------------- */
+  var AUTH = { token: '', refresh: '', login: '', clientId: '' };
+  var deviceFlow = { active: false, timer: null };
+
+  function loadAuth() { try { return JSON.parse(localStorage.getItem('rfc_auth') || 'null'); } catch (e) { return null; } }
+  function saveAuth() { try { localStorage.setItem('rfc_auth', JSON.stringify({ token: AUTH.token, refresh: AUTH.refresh, clientId: AUTH.clientId })); } catch (e) {} }
+  function clearAuth() { AUTH.token = AUTH.refresh = AUTH.login = ''; try { localStorage.removeItem('rfc_auth'); localStorage.removeItem('rfc_token'); } catch (e) {} }
+
+  function setAuthUI(state, msg) { // 'idle' | 'wait' | 'done'
+    $('authIdle').hidden = state !== 'idle';
+    $('authWait').hidden = state !== 'wait';
+    $('authDone').hidden = state !== 'done';
+    $('authStatus').textContent = msg || (state === 'done'
+      ? 'Logged in as ' + AUTH.login + ' — you can send messages, exact channel badges enabled.'
+      : 'Not logged in — chat is read-only.');
+    updateSendBar();
+  }
+
+  function finishLogin(accessToken, refreshToken) {
+    return TwitchChat.validateToken(accessToken).then(function (d) {
+      AUTH.token = accessToken.replace(/^oauth:/, '');
+      AUTH.refresh = refreshToken || '';
+      AUTH.login = d.login;
+      AUTH.clientId = AUTH.clientId || d.client_id;
+      saveAuth();
+      setAuthUI('done');
+      if (S.channel) connect();
+    });
+  }
+
+  /* --- one-click "Log in with Twitch" (OAuth device flow) --- */
+  function startDeviceLogin() {
+    var cid = $('clientIdInput').value.trim();
+    if (!cid) { setAuthUI('idle', 'Paste your Client ID first — see the one-time setup steps below.'); return; }
+    AUTH.clientId = cid;
+    try { localStorage.setItem('rfc_clientid', cid); } catch (e) {}
+    fetch('https://id.twitch.tv/oauth2/device', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'client_id=' + encodeURIComponent(cid) + '&scopes=' + encodeURIComponent('chat:read chat:edit')
+    }).then(function (r) { return r.json(); }).then(function (d) {
+      if (!d.device_code) throw new Error(d.message || 'Could not start login — check the Client ID (the app must be Client Type: Public).');
+      $('deviceCode').textContent = d.user_code;
+      $('activateLink').href = d.verification_uri || 'https://www.twitch.tv/activate';
+      setAuthUI('wait');
+      deviceFlow.active = true;
+      var interval = Math.max(d.interval || 5, 5) * 1000;
+      var deadline = Date.now() + (d.expires_in || 1800) * 1000;
+      (function poll() {
+        if (!deviceFlow.active) return;
+        if (Date.now() > deadline) { deviceFlow.active = false; setAuthUI('idle', 'Code expired — press Log in with Twitch again.'); return; }
+        fetch('https://id.twitch.tv/oauth2/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: 'client_id=' + encodeURIComponent(cid) +
+                '&scopes=' + encodeURIComponent('chat:read chat:edit') +
+                '&device_code=' + encodeURIComponent(d.device_code) +
+                '&grant_type=urn:ietf:params:oauth:grant-type:device_code'
+        }).then(function (r) { return r.json(); }).then(function (t) {
+          if (!deviceFlow.active) return;
+          if (t.access_token) {
+            deviceFlow.active = false;
+            finishLogin(t.access_token, t.refresh_token).catch(function (e) { setAuthUI('idle', e.message); });
+          } else {
+            deviceFlow.timer = setTimeout(poll, interval);
+          }
+        }).catch(function () { if (deviceFlow.active) deviceFlow.timer = setTimeout(poll, interval); });
+      })();
+    }).catch(function (e) {
+      setAuthUI('idle', (e.message || 'Login failed.') + ' If this keeps failing, use the token method under Advanced.');
+    });
+  }
+  $('twitchLoginBtn').onclick = startDeviceLogin;
+  $('cancelLoginBtn').onclick = function () {
+    deviceFlow.active = false;
+    if (deviceFlow.timer) clearTimeout(deviceFlow.timer);
+    setAuthUI('idle');
+  };
+
+  /* --- silent token refresh (device-flow logins never expire on you) --- */
+  function refreshLogin() {
+    if (!AUTH.refresh || !AUTH.clientId) return Promise.reject(new Error('no refresh token'));
+    return fetch('https://id.twitch.tv/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'grant_type=refresh_token&client_id=' + encodeURIComponent(AUTH.clientId) +
+            '&refresh_token=' + encodeURIComponent(AUTH.refresh)
+    }).then(function (r) { return r.json(); }).then(function (t) {
+      if (!t.access_token) throw new Error('refresh failed');
+      return finishLogin(t.access_token, t.refresh_token || AUTH.refresh);
+    });
+  }
+
+  /* --- advanced: manual token fallback --- */
+  function doLogin(token) {
+    token = (token || '').replace(/^oauth:/, '').trim();
+    if (!token) { setAuthUI('idle', 'Paste a token first.'); return; }
+    setAuthUI('idle', 'Checking token…');
+    finishLogin(token, '').catch(function (e) { setAuthUI('idle', e.message); });
+  }
+  $('loginBtn').onclick = function () { doLogin($('tokenInput').value); };
+  $('tokenInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin($('tokenInput').value); });
+
+  $('logoutBtn').onclick = function () {
+    clearAuth();
+    setAuthUI('idle');
+    if (S.channel) connect();             // back to anonymous read-only
+  };
+
+  /* ---------------- send bar ---------------- */
+  function updateSendBar() {
+    var on = !!(AUTH.login && chat && chat.alive);
+    $('sendBar').classList.toggle('on', on);
+    $('stage').classList.toggle('with-send', on);
+  }
+  function sendNow() {
+    var inp = $('sendInput');
+    if (chat && chat.send(inp.value)) inp.value = '';
+  }
+  $('sendBtn').onclick = sendNow;
+  $('sendInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') sendNow(); });
+
+  /* ---------------- connect ---------------- */
+  $('channel').value = S.channel;
+  function connect() {
+    var ch = $('channel').value.trim().replace(/^#/, '');
+    if (!ch) { statusEl.textContent = 'Enter a channel name'; statusEl.className = ''; return; }
+    S.channel = ch; save();
+    if (chat) chat.disconnect();
+    chatEl.innerHTML = '';
+    chat = new TwitchChat({
+      channel: ch, container: chatEl,
+      token: AUTH.token, login: AUTH.login, clientId: AUTH.clientId,
+      onStatus: function (s) {
+        if (s === 'connected') {
+          statusEl.textContent = 'Connected to #' + ch + (AUTH.login ? ' as ' + AUTH.login : '');
+          statusEl.className = 'live';
+        }
+        else if (s === 'connecting') { statusEl.textContent = 'Connecting…'; statusEl.className = ''; }
+        else if (s === 'reconnecting') { statusEl.textContent = 'Reconnecting…'; statusEl.className = ''; }
+        else if (s.indexOf('error:') === 0) {
+          statusEl.textContent = s.slice(6); statusEl.className = '';
+          if (/authentication failed/i.test(s) && AUTH.refresh) {
+            statusEl.textContent = 'Session expired — refreshing…';
+            refreshLogin().catch(function () { clearAuth(); setAuthUI('idle', 'Session expired — log in again.'); connect(); });
+          }
+        }
+        updateSendBar();
+      }
+    });
+    applyChatOpts();
+    chat.connect();
+    updateSendBar();
+  }
+  $('connectBtn').onclick = connect;
+  $('channel').addEventListener('keydown', function (e) { if (e.key === 'Enter') connect(); });
+
+  /* restore saved session, then connect */
+  try { $('clientIdInput').value = localStorage.getItem('rfc_clientid') || ''; } catch (e) {}
+  var stored = loadAuth();
+  if (!stored) { // migrate the old single-token storage if present
+    try { var oldTok = localStorage.getItem('rfc_token'); if (oldTok) stored = { token: oldTok, refresh: '', clientId: '' }; } catch (e) {}
+  }
+  if (stored && stored.token) {
+    AUTH.clientId = stored.clientId || $('clientIdInput').value.trim();
+    AUTH.refresh = stored.refresh || '';
+    setAuthUI('idle', 'Restoring session…');
+    finishLogin(stored.token, stored.refresh || '').catch(function () {
+      refreshLogin().catch(function () {
+        clearAuth();
+        setAuthUI('idle', 'Session expired — log in again.');
+        if (S.channel) connect();
+      });
+    });
+  } else {
+    setAuthUI('idle');
+    if (S.channel) connect();
+  }
+
+  /* ---------------- settings drawer toggle ---------------- */
+  $('gearBtn').onclick = function () { $('panel').classList.toggle('hidden'); };
+
+  /* ---------------- OBS query string builder ---------------- */
+  $('copyObs').onclick = function () {
+    var p = new URLSearchParams();
+    p.set('channel', S.channel || $('channel').value.trim());
+    if (AUTH.token) p.set('token', AUTH.token);   // lets the OBS source load exact badges too
+    if (S.bgMode === 'color') p.set('bg', S.bgColor);
+    else if (S.bgMode === 'image' && S.bgImage) p.set('bg', S.bgImage);
+    else if (S.bgMode === 'dark') p.set('bg', '#18181b');
+    // transparent = OBS default, no param needed
+    p.set('size', S.fontSize);
+    p.set('color', S.textColor.replace('#', ''));
+    if (!S.shadow) p.set('shadow', '0');
+    if (S.bold) p.set('bold', '1');
+    if (S.align !== 'auto') p.set('align', S.align);
+    if (!S.badges) p.set('badges', '0');
+    if (!S.emotes) p.set('emotes', '0');
+    if (!S.images) p.set('images', '0');
+    if (!S.events) p.set('events', '0');
+    if (S.ts) p.set('ts', '1');
+    if (S.bubbles) p.set('bubbles', '1');
+    p.set('limit', S.limit);
+    if (S.fade) p.set('fade', S.fade);
+    if (S.imgHeight !== 220) p.set('imgheight', S.imgHeight);
+    var q = '?' + p.toString();
+    var out = $('obsOut');
+    out.style.display = 'block';
+    out.textContent = q;
+    if (navigator.clipboard) navigator.clipboard.writeText(q).then(function () {
+      $('copyObs').textContent = 'Copied ✓';
+      setTimeout(function () { $('copyObs').textContent = 'Copy settings for OBS version'; }, 1600);
+    }).catch(function () {});
+  };
+})();
+</script>
+</body>
+</html>
